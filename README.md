@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Global Talents Resources
 
-## Getting Started
+Plateforme de recrutement et de gestion RH pour le Sénégal, la Côte d'Ivoire, le Mali, le Burkina Faso, le Niger et la Guinée.
+Site : globaltalents-resources.com
 
-First, run the development server:
+Ce dépôt contient le **lot MVP** du cahier des charges : portail emploi, espace candidat, espace recruteur avec ATS et CVthèque, back-office d'administration et paiements (en mode démonstration).
+
+## Ce qui est livré
+
+| Espace | Fonctions |
+| --- | --- |
+| Public | Accueil avec recherche, offres avec 11 filtres, fiche offre (score de correspondance, partage WhatsApp, LinkedIn, Facebook, e-mail, signalement), entreprises, conseils carrière, pages légales, sitemap et balisage Google for Jobs |
+| Candidat | Inscription, profil complet (identité, résumé, souhaits, expériences, formations, compétences, langues, documents), CV en PDF / Word / photo, candidature avec questions de présélection, candidature anonyme, suivi détaillé avec « Vos chances de succès », offres sauvegardées, alertes, entreprises suivies et masquées, notifications, paramètres de visibilité, export et suppression des données |
+| Recruteur | Compte entreprise vérifié, tableau de bord, création et modification d'offres avec modération, questions éliminatoires, pipeline en colonnes ou en liste, actions groupées, fiche candidat (score, réponses, notes d'équipe, messages, CV), export CSV, CVthèque avec crédits, page entreprise, équipe, abonnement, paiement Mobile Money, factures |
+| Administration | Vue d'ensemble par pays, modération des offres et des signalements, validation des entreprises, crédits offerts, utilisateurs, paiements, articles, journal d'audit |
+
+## Lancer en local
+
+Prérequis : Node.js 20 ou plus.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:local          # PostgreSQL local embarqué (laisser tourner)
+cp .env.example .env.local
+set -a; . ./.env.local; set +a
+npm run migrate           # schéma, référentiels, données de démonstration
+npm run dev               # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Tests de bout en bout (Python 3 et Playwright) : `npm test`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Comptes de démonstration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Créés quand `SEED_DEMO=1`. Mot de passe : la valeur de `DEMO_PASSWORD` (par défaut `Demo-GTR-2026`).
 
-## Learn More
+- Candidat : `candidat@demo.globaltalents-resources.com`
+- Recruteurs : `recruteur.<entreprise>@demo.globaltalents-resources.com`, par exemple `recruteur.lagune-banque@demo.globaltalents-resources.com`
+- Administrateur : `ADMIN_EMAIL` et `ADMIN_PASSWORD`, définis dans les variables d'environnement
 
-To learn more about Next.js, take a look at the following resources:
+En production réelle, mettez `SEED_DEMO=0` avant d'ouvrir le service au public, puis supprimez les entreprises de démonstration depuis la base.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Variables d'environnement
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variable | Rôle |
+| --- | --- |
+| `DATABASE_URL` | Connexion PostgreSQL |
+| `APP_URL` | Adresse publique, par exemple `https://globaltalents-resources.com` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Compte administrateur créé au premier démarrage |
+| `SEED_DEMO` | `1` pour charger les données de démonstration |
+| `DEMO_PASSWORD` | Mot de passe des comptes de démonstration |
+| `PAYMENTS_MODE` | `demo` (par défaut, aucun encaissement) ou `live` une fois l'agrégateur branché |
 
-## Deploy on Vercel
+## Architecture
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Next.js 15 (App Router, rendu serveur, actions serveur), TypeScript, Tailwind CSS 4
+- PostgreSQL : schéma dans `db/schema.sql`, rejoué à chaque démarrage par `scripts/migrate.mjs`
+- Sessions par cookie httpOnly, mots de passe hachés en Argon2, limitation des tentatives de connexion
+- Cloisonnement : chaque requête recruteur est filtrée par l'entreprise de l'utilisateur
+- Fichiers (CV) stockés en base, vérifiés par signature, 5 Mo maximum, téléchargement contrôlé
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Ce qui reste pour les lots suivants
+
+- **V1** : IA (extraction de CV, présélection, rédaction d'offres), envoi réel des e-mails, SMS et WhatsApp, agrégateur de paiement réel (CinetPay, PayDunya ou équivalent), tests de personnalité, API publique, application Android
+- **V2** : SIRH (dossiers, congés, temps, portail employé) et paie Sénégal et Côte d'Ivoire, labels employeur
+- **V3** : paie des 4 autres pays, entretiens annuels, formation, SSO, marketplace de plugins
+
+Points à faire valider avant l'ouverture au public : CGU et politique de confidentialité (juriste), déclarations auprès des autorités de protection des données de chaque pays, mentions légales des factures et TVA (expert-comptable), test d'intrusion.
