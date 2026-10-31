@@ -12,6 +12,7 @@ export default async function CandidateLayout({ children }: { children: React.Re
           { href: "/candidat/profil", label: "Mon profil et CV" },
           { href: "/candidat/candidatures", label: "Mes candidatures" },
           { href: "/candidat/sauvegardees", label: "Offres sauvegardées" },
+          { href: "/candidat/test/resultats", label: "Test de personnalité" },
           { href: "/candidat/alertes", label: "Mes alertes" },
           { href: "/candidat/entreprises", label: "Entreprises suivies" },
           { href: "/candidat/notifications", label: "Notifications" },

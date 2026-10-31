@@ -92,7 +92,7 @@ with sync_playwright() as p:
         lid, pid = start()
         out = mock(f"/payments/{pid}/simulate", {"outcome": "succeeded", "bad_signature": True})
         assert out["webhook"]["status"] == 401, out["webhook"]
-        evt = {"id": "evt_forge1", "type": "payment.succeeded", "data": {"id": pid, "status": "succeeded"}}
+        evt = {"id": f"evt_forge1_{int(time.time()*1000)}", "type": "payment.succeeded", "data": {"id": pid, "status": "succeeded"}}
         raw = json.dumps(evt)
         assert post_webhook(raw, sign(raw, t=int(time.time()) - 3600))[0] == 401, "signature trop ancienne refusée"
         assert post_webhook(raw, "t=1,v1=00")[0] == 401
@@ -103,13 +103,26 @@ with sync_playwright() as p:
         # Webhook correctement signé mais qui ment : e-Wari dit « pending ». Rien ne doit être crédité.
         c = credits()
         lid, pid = start()
-        evt = {"id": "evt_forge2", "type": "payment.succeeded", "data": {"id": pid, "status": "succeeded", "amount": 35000}}
+        evt = {"id": f"evt_forge2_{int(time.time()*1000)}", "type": "payment.succeeded", "data": {"id": pid, "status": "succeeded", "amount": 35000}}
         raw = json.dumps(evt)
         code, body = post_webhook(raw, sign(raw))
-        assert code == 200 and '"status":"pending"' in body.replace(" ", ""), body
+        assert code == 503 and '"retry":true' in body.replace(" ", ""), (code, body)  # e-Wari devra renvoyer l'événement
         assert credits() == c, "un webhook non confirmé par l'API ne crédite rien"
         mock(f"/payments/{pid}/cancel", {})
-    step("Webhook signé mais non confirmé par l'API e-Wari : rien n'est crédité", t_forged_body)
+    step("Webhook signé mais non confirmé par l'API e-Wari : rien n'est crédité, e-Wari doit le renvoyer", t_forged_body)
+
+    def t_early_webhook_retry():
+        # Le webhook arrive avant que l'API e-Wari ne confirme ; la nouvelle tentative du même événement crédite.
+        c = credits()
+        lid, pid = start()
+        evt = {"id": f"evt_early_{int(time.time()*1000)}", "type": "payment.succeeded", "data": {"id": pid}}
+        raw = json.dumps(evt)
+        assert post_webhook(raw, sign(raw))[0] == 503
+        mock(f"/payments/{pid}/simulate", {"outcome": "succeeded", "webhook": False})
+        code, body = post_webhook(raw, sign(raw))
+        assert code == 200 and '"status":"paid"' in body.replace(" ", ""), (code, body)
+        assert credits() == c + 1
+    step("Webhook arrivé trop tôt : la nouvelle tentative d'e-Wari est bien prise en compte", t_early_webhook_retry)
 
     def t_tampered_amount():
         c = credits()

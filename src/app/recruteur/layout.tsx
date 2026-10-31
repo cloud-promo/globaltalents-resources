@@ -4,8 +4,8 @@ import { SideNav } from "@/components/SideNav";
 
 export default async function RecruiterLayout({ children }: { children: React.ReactNode }) {
   const { company } = await requireRecruiter();
-  const c = await one<{ job_credits: number; cv_credits: number; cv_unlimited: boolean }>(
-    `SELECT job_credits,cv_credits,(cv_unlimited_until>now()) cv_unlimited FROM companies WHERE id=$1`,
+  const c = await one<{ job_credits: number; cv_credits: number; cv_unlimited: boolean; reject_reason: string }>(
+    `SELECT job_credits,cv_credits,(cv_unlimited_until>now()) cv_unlimited,reject_reason FROM companies WHERE id=$1`,
     [company.company_id],
   );
   return (
@@ -13,8 +13,8 @@ export default async function RecruiterLayout({ children }: { children: React.Re
       {company.status !== "verified" && (
         <p className="mb-6 rounded-lg border border-[#efd8a6] bg-saffron-soft p-3 text-sm">
           {company.status === "pending"
-            ? "Votre entreprise est en cours de vérification. Vous pouvez déjà préparer vos offres : elles seront publiées dès la validation."
-            : "Votre entreprise n'a pas été validée. Contactez entreprises@globaltalents-resources.com."}
+            ? "Votre entreprise est en cours de vérification par notre équipe partenaires (sous 24 h ouvrées, un appel de contrôle peut vous être passé). Vous pouvez déjà préparer vos offres : elles seront publiées dès la validation."
+            : `${company.status === "suspended" ? "Votre compte entreprise est suspendu." : "Votre entreprise n'a pas été validée."}${c?.reject_reason ? ` Motif : ${c.reject_reason}` : ""} Répondez-nous depuis l'onglet Support pour compléter votre dossier.`}
         </p>
       )}
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
@@ -37,6 +37,7 @@ export default async function RecruiterLayout({ children }: { children: React.Re
               { href: "/recruteur/entreprise", label: "Page entreprise" },
               { href: "/recruteur/equipe", label: "Équipe" },
               { href: "/recruteur/abonnement", label: "Abonnement et factures" },
+              { href: "/recruteur/support", label: "Support" },
             ]}
           />
         </div>

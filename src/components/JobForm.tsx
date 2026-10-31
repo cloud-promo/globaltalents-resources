@@ -2,6 +2,7 @@ import { ActionForm } from "@/components/Form";
 import { saveJob } from "@/app/actions/recruiter";
 import { CONTRACT_TYPES, EXPERIENCE_LEVELS, STUDY_LEVELS, REMOTE_OPTIONS, LANGUAGES } from "@/lib/ref";
 import type { Country, Named, City } from "@/lib/refdata";
+import { TRAITS } from "@/lib/personality";
 
 export type JobFormValues = {
   id?: number;
@@ -24,6 +25,7 @@ export type JobFormValues = {
   benefits?: string;
   skills?: string[];
   languages?: string[];
+  personality_traits?: string[];
   management?: boolean;
   confidential?: boolean;
   questions?: { question: string; eliminatory: boolean; expected: string }[];
@@ -112,6 +114,17 @@ export function JobForm({ v, refs, credits }: { v: JobFormValues; refs: { countr
               </label>
             ))}
           </div>
+        </fieldset>
+        <fieldset>
+          <legend className="label">Traits de personnalité recherchés (facultatif, 2 au maximum)</legend>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {TRAITS.map((t) => (
+              <label key={t.code} className="flex items-center gap-1.5">
+                <input type="checkbox" name="personality_traits" value={t.code} defaultChecked={v.personality_traits?.includes(t.code)} /> {t.label}
+              </label>
+            ))}
+          </div>
+          <span className="hint">Comparés aux résultats du test Boussole des candidats qui les partagent. Critère secondaire de la présélection automatique.</span>
         </fieldset>
         <label className="block">
           <span className="label">Avantages</span>

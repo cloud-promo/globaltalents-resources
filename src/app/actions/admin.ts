@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { query, one } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser, hashPassword } from "@/lib/auth";
+import crypto from "node:crypto";
 import { notify, audit } from "@/lib/notify";
 import { slugify } from "@/lib/format";
 import { ARTICLE_CATEGORIES } from "@/lib/ref";
@@ -115,4 +116,20 @@ export async function saveArticle(_: FormState, data: FormData): Promise<FormSta
   await audit(u.id, id ? "article.update" : "article.create", "article", String(id ?? title));
   revalidatePath("/", "layout");
   return { ok: id ? "Article mis à jour." : "Article créé." };
+}
+
+export async function createStaff(_: FormState, data: FormData): Promise<FormState> {
+  const u = await requireUser(["admin"]);
+  const email = str(data.get("email"), 200).toLowerCase();
+  const role = str(data.get("role")) === "moderator" ? "moderator" : "partner_manager";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Adresse e-mail invalide." };
+  if (await one(`SELECT 1 FROM users WHERE email=$1`, [email])) return { error: "Un compte existe déjà avec cette adresse." };
+  const temp = crypto.randomBytes(9).toString("base64url");
+  const row = await one<{ id: string }>(
+    `INSERT INTO users(email,password_hash,role,first_name,last_name) VALUES($1,$2,$3,$4,$5) RETURNING id`,
+    [email, await hashPassword(temp), role, str(data.get("first_name"), 80), str(data.get("last_name"), 80)],
+  );
+  await audit(u.id, "user.create_staff", "user", row!.id, { role });
+  revalidatePath("/admin/utilisateurs");
+  return { ok: `Compte créé pour ${email}. Mot de passe temporaire à lui transmettre : ${temp} (à changer dès la première connexion).` };
 }

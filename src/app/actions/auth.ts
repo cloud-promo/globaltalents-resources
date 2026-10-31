@@ -4,8 +4,8 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { one, tx } from "@/lib/db";
-import { checkPassword, createSession, destroySession, hashPassword, recordAttempt, tooManyAttempts } from "@/lib/auth";
-import { audit } from "@/lib/notify";
+import { checkPassword, createSession, destroySession, hashPassword, recordAttempt, tooManyAttempts, homeFor, type Role } from "@/lib/auth";
+import { audit, notifyPartnerTeam } from "@/lib/notify";
 import { slugify } from "@/lib/format";
 import type { FormState } from "@/components/Form";
 
@@ -35,7 +35,7 @@ export async function login(_: FormState, data: FormData): Promise<FormState> {
 
   await createSession(u.id);
   const next = safeNext(data.get("next"));
-  redirect(next || (u.role === "candidate" ? "/candidat" : u.role === "recruiter" ? "/recruteur" : "/admin"));
+  redirect(next || homeFor(u.role as Role));
 }
 
 export async function logout() {
@@ -117,6 +117,7 @@ export async function registerRecruiter(_: FormState, data: FormData): Promise<F
     return u.rows[0].id as string;
   });
   await audit(userId, "company.register", "company", slug);
+  await notifyPartnerTeam(`Nouvelle inscription entreprise : ${d.company_name}`, "À vérifier sous 24 h ouvrées.", "/partenaires/inscriptions");
   await createSession(userId);
   redirect("/recruteur?bienvenue=1");
 }

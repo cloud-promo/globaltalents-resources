@@ -8,6 +8,7 @@ import { JobCard } from "@/components/JobCard";
 import { SaveButton } from "@/components/SaveButton";
 import { stageOf } from "@/lib/ref";
 import { since } from "@/lib/format";
+import { latestPersonality } from "@/lib/personality-server";
 
 export const metadata = { title: "Mon espace" };
 
@@ -40,6 +41,7 @@ export default async function CandidateHome() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
   const hasCv = loaded.documents.some((d) => d.kind === "cv");
+  const test = await latestPersonality(u.id);
 
   return (
     <div className="space-y-8">
@@ -69,6 +71,21 @@ export default async function CandidateHome() {
           {comp.percent < 100 && <Link href="/candidat/profil" className="btn btn-primary">Compléter mon profil</Link>}
         </div>
       </section>
+
+      {test ? (
+        <Link href="/candidat/test/resultats" className="card flex items-center gap-4 p-4 hover:border-indigo">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-saffron-soft font-display text-lg font-bold text-ochre" aria-hidden="true">B</span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold">Profil Boussole : {test.profile}</span><span className="text-sm text-ink-soft">Revoir vos résultats et vos réglages de partage</span></span>
+        </Link>
+      ) : (
+        <section className="card flex flex-wrap items-center gap-4 border-saffron/40 bg-gradient-to-r from-saffron-soft to-white p-5">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold">Passez le test de personnalité Boussole</h2>
+            <p className="text-sm text-ink-soft">5 minutes pour découvrir vos forces au travail. Les recruteurs qui recherchent votre profil vous repèrent plus vite.</p>
+          </div>
+          <Link href="/candidat/test" className="btn btn-primary">Commencer le test</Link>
+        </section>
+      )}
 
       <section aria-labelledby="matchs">
         <div className="mb-4 flex items-end justify-between gap-3">

@@ -337,3 +337,27 @@ export async function deleteAccount(_: FormState, data: FormData): Promise<FormS
   await destroySession();
   redirect("/?compte-supprime=1");
 }
+
+// ---------- Test de personnalité ----------
+
+export async function savePersonality(data: FormData) {
+  const u = await candidate();
+  const { ITEMS, scoreAnswers, profileName } = await import("@/lib/personality");
+  const { retakeStatus } = await import("@/lib/personality-server");
+  let answers: number[] = [];
+  try {
+    answers = JSON.parse(str(data.get("answers"), 2000));
+  } catch {
+    answers = [];
+  }
+  if (!Array.isArray(answers) || answers.length !== ITEMS.length) redirect("/candidat/test");
+  const st = await retakeStatus(u.id);
+  if (!st.ok) redirect("/candidat/test/resultats");
+  const clean = answers.map((v) => Math.max(-2, Math.min(2, Math.round(Number(v) || 0))));
+  const scores = scoreAnswers(clean);
+  await query(`INSERT INTO personality_results(user_id,answers,scores,profile) VALUES($1,$2,$3,$4)`, [
+    u.id, JSON.stringify(clean), JSON.stringify(scores), profileName(scores),
+  ]);
+  revalidatePath("/candidat", "layout");
+  redirect("/candidat/test/resultats?nouveau=1");
+}

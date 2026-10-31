@@ -1,11 +1,12 @@
 import { query } from "@/lib/db";
 import { shortDate, since } from "@/lib/format";
-import { toggleUserSuspended } from "@/app/actions/admin";
+import { toggleUserSuspended, createStaff } from "@/app/actions/admin";
+import { ActionForm, Submit } from "@/components/Form";
 
 export const metadata = { title: "Utilisateurs" };
 export const dynamic = "force-dynamic";
 
-const ROLES: Record<string, string> = { candidate: "Candidat", recruiter: "Recruteur", admin: "Administrateur", moderator: "Modérateur" };
+const ROLES: Record<string, string> = { candidate: "Candidat", recruiter: "Recruteur", partner_manager: "Gestion des partenaires", admin: "Administrateur", moderator: "Modérateur" };
 
 export default async function AdminUsers({ searchParams }: { searchParams: Promise<{ q?: string; role?: string }> }) {
   const sp = await searchParams;
@@ -22,6 +23,19 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold">Utilisateurs</h1>
+      <details className="card p-4">
+        <summary className="cursor-pointer font-semibold">Créer un compte d&apos;équipe (gestion des partenaires, modération)</summary>
+        <ActionForm action={createStaff} resetOnSuccess className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <input name="first_name" className="input" placeholder="Prénom" aria-label="Prénom" required maxLength={80} />
+          <input name="last_name" className="input" placeholder="Nom" aria-label="Nom" required maxLength={80} />
+          <input name="email" type="email" className="input" placeholder="E-mail professionnel" aria-label="E-mail" required maxLength={200} />
+          <select name="role" className="input" aria-label="Rôle" defaultValue="partner_manager">
+            <option value="partner_manager">Gestion des partenaires</option>
+            <option value="moderator">Modérateur</option>
+          </select>
+          <Submit className="btn btn-primary">Créer le compte</Submit>
+        </ActionForm>
+      </details>
       <form className="flex flex-wrap gap-2">
         <input name="q" defaultValue={sp.q} className="input w-72" placeholder="Nom, e-mail ou téléphone" aria-label="Rechercher" />
         <select name="role" defaultValue={role ?? ""} className="input w-auto" aria-label="Rôle">

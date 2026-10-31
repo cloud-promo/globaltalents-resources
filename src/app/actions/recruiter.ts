@@ -11,6 +11,8 @@ import { markPaid, markClosed, refreshFromEwari } from "@/lib/payments";
 import { notify, audit } from "@/lib/notify";
 import { STAGES, CONTRACT_TYPES, stageOf } from "@/lib/ref";
 import type { FormState } from "@/components/Form";
+import { TRAITS } from "@/lib/personality";
+const TRAIT_CODES: string[] = TRAITS.map((t) => t.code);
 
 const str = (v: FormDataEntryValue | null, max = 5000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const STAGE_CODES = STAGES.map((s) => s.code) as [string, ...string[]];
@@ -59,6 +61,7 @@ function parseJob(data: FormData) {
   if (d.salary_min && d.salary_max && d.salary_min > d.salary_max) return { error: "Le salaire minimum dépasse le salaire maximum." } as const;
   const skills = str(data.get("skills"), 600).split(",").map((s) => s.trim()).filter(Boolean).slice(0, 15);
   const languages = data.getAll("languages").map(String).slice(0, 6);
+  const traits = data.getAll("personality_traits").map(String).filter((t) => TRAIT_CODES.includes(t)).slice(0, 2);
   const questions: { q: string; elim: boolean; exp: string }[] = [];
   for (let i = 0; i < 5; i++) {
     const q = str(data.get(`question_${i}`), 200);
@@ -68,6 +71,7 @@ function parseJob(data: FormData) {
     d,
     skills,
     languages,
+    traits,
     questions,
     show_salary: data.get("show_salary") === "on",
     management: data.get("management") === "on",
@@ -79,7 +83,7 @@ export async function saveJob(_: FormState, data: FormData): Promise<FormState> 
   const { user, company } = await requireRecruiter();
   const parsed = parseJob(data);
   if ("error" in parsed) return { error: parsed.error };
-  const { d, skills, languages, questions, show_salary, management, confidential } = parsed;
+  const { d, skills, languages, traits, questions, show_salary, management, confidential } = parsed;
   const jobId = Number(data.get("job_id")) || null;
   const asDraft = data.get("intent") === "draft";
 
@@ -101,6 +105,7 @@ export async function saveJob(_: FormState, data: FormData): Promise<FormState> 
          d.positions, d.salary_min ?? null, d.salary_max ?? null, show_salary, d.description, d.profile, d.benefits, skills, languages,
          management, confidential, nextStatus],
       );
+      await c.query(`UPDATE jobs SET personality_traits=$2 WHERE id=$1`, [jobId, traits]);
       await c.query(`DELETE FROM job_questions WHERE job_id=$1`, [jobId]);
       for (const [i, q] of questions.entries()) {
         await c.query(`INSERT INTO job_questions(job_id,question,eliminatory,expected,sort) VALUES($1,$2,$3,$4,$5)`, [jobId, q.q, q.elim, q.exp, i]);
@@ -124,6 +129,7 @@ export async function saveJob(_: FormState, data: FormData): Promise<FormState> 
        d.study_level, d.remote, d.positions, d.salary_min ?? null, d.salary_max ?? null, show_salary, d.description, d.profile, d.benefits,
        skills, languages, management, confidential, asDraft ? "draft" : "pending", String(d.duration)],
     );
+    await c.query(`UPDATE jobs SET personality_traits=$2 WHERE id=$1`, [rows[0].id, traits]);
     for (const [i, q] of questions.entries()) {
       await c.query(`INSERT INTO job_questions(job_id,question,eliminatory,expected,sort) VALUES($1,$2,$3,$4,$5)`, [rows[0].id, q.q, q.elim, q.exp, i]);
     }
@@ -372,4 +378,49 @@ export async function cancelPayment(data: FormData) {
   }
   await markClosed(pay.id, "cancelled", "Annulé par le recruteur");
   revalidatePath("/recruteur", "layout");
+}
+
+// ---------- Présélection automatique ----------
+
+export async function saveScreeningSettings(data: FormData) {
+  const { user, company } = await requireRecruiter();
+  const jobId = Number(data.get("job_id")) || 0;
+  const { SECONDARY, normalizeSettings } = await import("@/lib/screening");
+  const weights = Object.fromEntries(SECONDARY.map((s) => [s.key, Number(data.get(`w_${s.key}`))]));
+  const settings = normalizeSettings({
+    weights,
+    exclude_failed: data.get("exclude_failed") === "on",
+    require_study: data.get("require_study") === "on",
+    require_experience: data.get("require_experience") === "on",
+    same_country: data.get("same_country") === "on",
+  });
+  const r = await query(`UPDATE jobs SET screening_settings=$3 WHERE id=$1 AND company_id=$2 RETURNING id`, [jobId, company.company_id, JSON.stringify(settings)]);
+  if (!r.length) return;
+  await audit(user.id, "job.screening_settings", "job", String(jobId), settings);
+  revalidatePath(`/recruteur/offres/${jobId}/preselection`);
+}
+
+export async function analyzeMotivations(data: FormData) {
+  const { user, company } = await requireRecruiter();
+  const jobId = Number(data.get("job_id")) || 0;
+  const { aiEnabled, aiMotivation } = await import("@/lib/ai");
+  const { loadScreening } = await import("@/lib/screening-server");
+  if (!aiEnabled()) return;
+  const loaded = await loadScreening(jobId, company.company_id);
+  if (!loaded) return;
+  const todo = loaded.candidates.filter((c) => !c.ai_motivation && c.stage !== "refuse").slice(0, 40);
+  let done = 0;
+  for (let i = 0; i < todo.length; i += 4) {
+    await Promise.all(
+      todo.slice(i, i + 4).map(async (c) => {
+        const m = await aiMotivation(loaded.job, c.cover_letter, c.answers);
+        if (m) {
+          await query(`UPDATE applications SET ai_motivation=$2 WHERE id=$1`, [c.application_id, JSON.stringify({ ...m, at: new Date().toISOString() })]);
+          done++;
+        }
+      }),
+    );
+  }
+  await audit(user.id, "job.ai_motivation", "job", String(jobId), { analysed: done });
+  revalidatePath(`/recruteur/offres/${jobId}/preselection`);
 }

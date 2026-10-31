@@ -30,7 +30,7 @@ export function MatchMeter({ score }: { score: number }) {
 export function JobCard({ job, score, saved }: { job: JobRow; score?: number; saved?: React.ReactNode }) {
   const salary = job.show_salary ? salaryRange(job.salary_min, job.salary_max, job.currency) : "";
   return (
-    <article className="card relative flex gap-4 p-4 sm:p-5">
+    <article className="card card-hover relative flex gap-4 p-4 sm:p-5">
       <CompanyBadge name={job.company_name} color={job.confidential ? "#6B7394" : job.brand_color} />
       <div className="min-w-0 flex-1">
         <h3 className="text-[1.08rem] font-semibold">

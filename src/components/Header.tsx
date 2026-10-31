@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getUser } from "@/lib/auth";
+import { getUser, homeFor } from "@/lib/auth";
 import { one } from "@/lib/db";
 import { Logo } from "./Logo";
 import { logout } from "@/app/actions/auth";
@@ -7,6 +7,7 @@ import { logout } from "@/app/actions/auth";
 const NAV = [
   { href: "/offres", label: "Offres d'emploi" },
   { href: "/entreprises", label: "Entreprises" },
+  { href: "/test-de-personnalite", label: "Test de personnalité" },
   { href: "/conseils", label: "Conseils" },
 ];
 
@@ -15,8 +16,7 @@ export async function Header() {
   const unread = user
     ? (await one<{ n: number }>(`SELECT count(*)::int n FROM notifications WHERE user_id=$1 AND read_at IS NULL`, [user.id]))?.n ?? 0
     : 0;
-  const home =
-    user?.role === "candidate" ? "/candidat" : user?.role === "recruiter" ? "/recruteur" : user ? "/admin" : null;
+  const home = user ? homeFor(user.role) : null;
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
@@ -30,7 +30,7 @@ export async function Header() {
               {n.label}
             </Link>
           ))}
-          <Link href="/recruteurs" className="hover:text-indigo">
+          <Link href="/recruteurs" className="rounded-full bg-saffron-soft px-3 py-1 text-ochre hover:bg-saffron hover:text-ink">
             Vous recrutez ?
           </Link>
         </nav>

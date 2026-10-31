@@ -45,6 +45,13 @@ export async function POST(req: Request) {
   try {
     const remote = await getEwariPayment(providerId);
     const status = await reconcile(local, remote);
+    if (status === "pending" && evt.type !== "payment.pending") {
+      // L'événement annonce un état final que l'API ne confirme pas (encore) : on ne crédite rien,
+      // on libère l'événement et on demande à e-Wari de le renvoyer plus tard.
+      await query(`DELETE FROM payment_events WHERE event_id=$1`, [String(evt.id).slice(0, 120)]);
+      await audit(null, "webhook.ewari.unconfirmed", "payment", local.id, { type: evt.type, remote: remote.status });
+      return NextResponse.json({ received: true, status, retry: true }, { status: 503 });
+    }
     return NextResponse.json({ received: true, status });
   } catch (e) {
     // On libère l'événement pour qu'e-Wari puisse le renvoyer

@@ -48,7 +48,7 @@ export type JobFilters = {
 
 export const JOB_SELECT = `
   j.id,j.title,j.city,j.country_code,co.name country_name,co.currency,j.contract_type,j.experience_level,j.study_level,j.remote,
-  j.salary_min,j.salary_max,j.show_salary,j.positions,j.published_at,j.expires_at,j.featured,j.confidential,j.function_id,
+  j.salary_min,j.salary_max,j.show_salary,j.positions,j.published_at,j.expires_at,(j.featured AND (j.featured_until IS NULL OR j.featured_until > now())) featured,j.confidential,j.function_id,
   f.name function_name,s.name sector_name,j.skills,c.id company_id,
   CASE WHEN j.confidential THEN 'Entreprise confidentielle' ELSE c.name END company_name,
   CASE WHEN j.confidential THEN '' ELSE c.slug END company_slug, c.brand_color`;
@@ -92,7 +92,7 @@ export async function searchJobs(f: JobFilters, userId?: string | null) {
   }
   const page = Math.max(1, Number(f.page) || 1);
   const sql = `SELECT ${JOB_SELECT}, count(*) OVER()::int total ${JOB_FROM} WHERE ${where.join(" AND ")}
-    ORDER BY j.featured DESC, j.published_at DESC LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`;
+    ORDER BY (j.featured AND (j.featured_until IS NULL OR j.featured_until > now())) DESC, j.published_at DESC LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`;
   const rows = await query<JobRow & { total: number }>(sql, params);
   return { jobs: rows, total: rows[0]?.total ?? 0, page, pages: Math.max(1, Math.ceil((rows[0]?.total ?? 0) / PAGE_SIZE)) };
 }

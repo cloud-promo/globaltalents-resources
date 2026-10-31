@@ -2,14 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionForm, Submit } from "@/components/Form";
 import { login } from "@/app/actions/auth";
-import { getUser } from "@/lib/auth";
+import { getUser, homeFor } from "@/lib/auth";
 
 export const metadata = { title: "Se connecter" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
   const user = await getUser();
-  if (user) redirect(user.role === "candidate" ? "/candidat" : user.role === "recruiter" ? "/recruteur" : "/admin");
+  if (user) redirect(homeFor(user.role));
 
   return (
     <div className="mx-auto max-w-md px-4 py-12">

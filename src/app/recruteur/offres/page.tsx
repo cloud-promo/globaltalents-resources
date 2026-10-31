@@ -69,6 +69,7 @@ export default async function RecruiterJobs({ searchParams }: { searchParams: Pr
                 <td className="p-3">{j.status === "published" ? shortDate(j.expires_at) : ""}</td>
                 <td className="p-3">
                   <div className="flex flex-wrap justify-end gap-1.5">
+                    <Link href={`/recruteur/offres/${j.id}/preselection`} className="btn btn-primary btn-sm">Top 10</Link>
                     <Link href={`/recruteur/offres/${j.id}/modifier`} className="btn btn-ghost btn-sm">Modifier</Link>
                     {j.status === "published" && <Link href={jobPath(j.id, j.title, j.city)} className="btn btn-ghost btn-sm">Voir</Link>}
                     {j.status === "published" && <Op id={j.id} op="extend" label="Prolonger 4 sem." />}

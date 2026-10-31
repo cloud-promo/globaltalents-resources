@@ -9,7 +9,7 @@ import { one, query } from "./db";
 const COOKIE = "gtr_session";
 const SESSION_DAYS = 30;
 
-export type Role = "candidate" | "recruiter" | "admin" | "moderator";
+export type Role = "candidate" | "recruiter" | "admin" | "moderator" | "partner_manager";
 export type CurrentUser = {
   id: string;
   email: string;
@@ -90,6 +90,15 @@ export async function requireRecruiter() {
   const m = await getMembership(u.id);
   if (!m) redirect("/recruteurs/inscription");
   return { user: u, company: m };
+}
+
+// Équipe « gestion des partenaires » : gestionnaires et administrateurs
+export async function requirePartnerStaff() {
+  return requireUser(["partner_manager", "admin"]);
+}
+
+export function homeFor(role: Role) {
+  return { candidate: "/candidat", recruiter: "/recruteur", partner_manager: "/partenaires", admin: "/admin", moderator: "/admin" }[role];
 }
 
 // Limite simple des tentatives de connexion (mémoire du processus)

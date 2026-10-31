@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getJob, getQuestions, getMatchProfile, JOB_FROM, JOB_SELECT, PUBLISHED, type JobRow } from "@/lib/jobs";
 import { getUser } from "@/lib/auth";
+import { latestPersonality } from "@/lib/personality-server";
+import { traitFit, traitLabel } from "@/lib/personality";
 import { one, query } from "@/lib/db";
 import { matchScore } from "@/lib/match";
 import { date, jobPath, since, salaryRange } from "@/lib/format";
@@ -78,7 +80,15 @@ export default async function JobPage({ params }: { params: Params }) {
   let saved = false;
   let following = false;
   let hidden = false;
+  let fit: number | null = null;
+  let hasTest = false;
+  let shareDefault = false;
+  const wantedTraits = (await one<{ personality_traits: string[] }>(`SELECT personality_traits FROM jobs WHERE id=$1`, [id]))?.personality_traits ?? [];
   if (isCandidate) {
+    const test = await latestPersonality(user.id);
+    hasTest = !!test;
+    shareDefault = !!(await one<{ share_test: boolean }>(`SELECT share_test FROM candidate_profiles WHERE user_id=$1`, [user.id]))?.share_test;
+    fit = traitFit(test?.scores, wantedTraits);
     const profile = await getMatchProfile(user.id);
     match = profile ? matchScore(profile, job) : null;
     existing = await one<{ id: string; stage: string; created_at: string }>(`SELECT id,stage,created_at FROM applications WHERE job_id=$1 AND candidate_id=$2`, [id, user.id]);
@@ -192,6 +202,15 @@ export default async function JobPage({ params }: { params: Params }) {
                     </li>
                   ))}
                 </ul>
+                {wantedTraits.length > 0 && (
+                  <p className="mt-3 rounded-lg bg-saffron-soft px-3 py-2 text-sm">
+                    {fit !== null ? (
+                      <><span className="font-semibold">Adéquation de personnalité : {fit} %</span> sur les traits recherchés ({wantedTraits.map(traitLabel).join(", ").toLowerCase()}).</>
+                    ) : hasTest ? null : (
+                      <>Le recruteur recherche : {wantedTraits.map(traitLabel).join(", ").toLowerCase()}. <Link href="/candidat/test" className="font-semibold text-indigo underline">Passez le test Boussole</Link> pour connaître votre adéquation.</>
+                    )}
+                  </p>
+                )}
               </div>
             )}
             {isCandidate && existing && (
@@ -234,7 +253,7 @@ export default async function JobPage({ params }: { params: Params }) {
                   <input type="checkbox" name="anonymous" className="mt-1" /> Candidature anonyme : votre nom est masqué jusqu&apos;à l&apos;entretien
                 </label>
                 <label className="flex items-start gap-2 text-sm">
-                  <input type="checkbox" name="share_test" className="mt-1" /> Partager les résultats de mes tests avec ce recruteur
+                  <input type="checkbox" name="share_test" className="mt-1" defaultChecked={shareDefault} /> Partager les résultats de mes tests avec ce recruteur
                 </label>
                 <Submit className="btn btn-primary w-full" pendingLabel="Envoi…">Envoyer ma candidature</Submit>
               </ActionForm>

@@ -42,6 +42,7 @@ export default async function PipelinePage({ params, searchParams }: { params: P
           <p className="text-ink-soft">{job.city}, {JOB_STATUS_LABELS[job.status]}, {cards.length} candidature{cards.length > 1 ? "s" : ""} affichée{cards.length > 1 ? "s" : ""}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/recruteur/offres/${job.id}/preselection`} className="btn btn-primary btn-sm">Présélection auto : top 10 à interviewer</Link>
           {job.status === "published" && <Link href={jobPath(job.id, job.title, job.city)} className="btn btn-ghost btn-sm">Voir l&apos;annonce</Link>}
           <Link href={`/recruteur/offres/${job.id}/modifier`} className="btn btn-ghost btn-sm">Modifier</Link>
           <a href={`/api/recruteur/offres/${job.id}/export`} className="btn btn-ghost btn-sm">Exporter (CSV)</a>

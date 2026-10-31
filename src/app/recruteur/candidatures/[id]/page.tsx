@@ -8,6 +8,9 @@ import { date, shortDate } from "@/lib/format";
 import { EXPERIENCE_LEVELS, STUDY_LEVELS, STAGES, labelOf, stageOf } from "@/lib/ref";
 import { ActionForm, Submit } from "@/components/Form";
 import { moveApplication, addNote, messageCandidate } from "@/app/actions/recruiter";
+import { latestPersonality } from "@/lib/personality-server";
+import { TraitBars } from "@/components/TraitBars";
+import { dominant } from "@/lib/personality";
 
 export const metadata = { title: "Fiche candidat" };
 
@@ -52,6 +55,8 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
     getRefs(),
   ]);
   const p = data.profile;
+  const test = app.share_test ? await latestPersonality(app.candidate_id) : null;
+  const wanted = (await one<{ personality_traits: string[] }>(`SELECT personality_traits FROM jobs WHERE id=$1`, [app.job_id]))?.personality_traits ?? [];
   const masked = app.anonymous && !["entretien_rh", "entretien_manager", "offre", "embauche"].includes(app.stage);
   const avg = notes.filter((n) => n.rating).reduce((s, n, _, arr) => s + (n.rating ?? 0) / arr.length, 0);
 
@@ -106,6 +111,22 @@ export default async function ApplicationPage({ params }: { params: Promise<{ id
               <p className="mt-2 whitespace-pre-line text-sm">{app.cover_letter}</p>
             </section>
           )}
+
+          <section className="card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Test de personnalité Boussole</h2>
+              {test && <span className="chip bg-indigo text-white">Profil {test.profile}</span>}
+            </div>
+            {test ? (
+              <>
+                <p className="mt-1 text-sm text-ink-soft">Passé le {date(test.created_at)}. Traits dominants : {dominant(test.scores).first.label.toLowerCase()}, {dominant(test.scores).second.label.toLowerCase()}.</p>
+                <div className="mt-4"><TraitBars scores={test.scores} highlight={wanted} /></div>
+                <p className="mt-3 text-xs text-muted">Auto-évaluation indicative : à utiliser comme support d&apos;entretien, jamais comme seul critère de décision.</p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-ink-soft">{app.share_test ? "Le candidat n'a pas encore passé le test." : "Le candidat n'a pas partagé ses résultats pour cette candidature."}</p>
+            )}
+          </section>
 
           <section className="card p-5">
             <h2 className="text-lg font-bold">Profil</h2>

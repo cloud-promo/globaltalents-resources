@@ -16,3 +16,9 @@ export async function audit(actorId: string | null, action: string, targetType =
     JSON.stringify(meta),
   ]);
 }
+
+// Prévient toute l'équipe « gestion des partenaires » (gestionnaires et administrateurs)
+export async function notifyPartnerTeam(title: string, body = "", link = "") {
+  const team = await query<{ id: string }>(`SELECT id FROM users WHERE role IN ('partner_manager','admin') AND NOT suspended`);
+  for (const t of team) await notify(t.id, title, body, link);
+}

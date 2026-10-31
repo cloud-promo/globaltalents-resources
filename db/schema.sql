@@ -373,3 +373,69 @@ CREATE TABLE IF NOT EXISTS payment_events (
   type text NOT NULL,
   received_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Rôle « gestionnaire des partenaires »
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('candidate', 'recruiter', 'admin', 'moderator', 'partner_manager'));
+
+-- Test de personnalité « Boussole »
+CREATE TABLE IF NOT EXISTS personality_results (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  answers jsonb NOT NULL,
+  scores jsonb NOT NULL,
+  profile text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS personality_results_user_idx ON personality_results(user_id, created_at DESC);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS personality_traits text[] NOT NULL DEFAULT '{}';
+
+-- Présélection automatique
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening_settings jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS ai_motivation jsonb;
+
+-- Gestion des partenaires : vérification, portefeuille, support, mises en avant
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS account_manager_id uuid REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS verification jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS reject_reason text NOT NULL DEFAULT '';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS featured_until timestamptz;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS featured_until timestamptz;
+
+CREATE TABLE IF NOT EXISTS company_notes (
+  id serial PRIMARY KEY,
+  company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  author_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  kind text NOT NULL DEFAULT 'note' CHECK (kind IN ('note', 'appel', 'email', 'visite', 'relance', 'geste')),
+  body text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS company_notes_company_idx ON company_notes(company_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id serial PRIMARY KEY,
+  company_id uuid NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  opened_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  category text NOT NULL,
+  subject text NOT NULL,
+  status text NOT NULL DEFAULT 'ouvert' CHECK (status IN ('ouvert', 'en_cours', 'attente_client', 'resolu', 'ferme')),
+  priority text NOT NULL DEFAULT 'normale' CHECK (priority IN ('basse', 'normale', 'haute', 'urgente')),
+  assigned_to uuid REFERENCES users(id) ON DELETE SET NULL,
+  job_id int REFERENCES jobs(id) ON DELETE SET NULL,
+  satisfaction int,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS support_tickets_status_idx ON support_tickets(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS support_tickets_company_idx ON support_tickets(company_id);
+
+CREATE TABLE IF NOT EXISTS ticket_messages (
+  id serial PRIMARY KEY,
+  ticket_id int NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+  author_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  body text NOT NULL,
+  internal boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ticket_messages_ticket_idx ON ticket_messages(ticket_id, created_at);
