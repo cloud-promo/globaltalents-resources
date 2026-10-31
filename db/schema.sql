@@ -353,3 +353,23 @@ CREATE TABLE IF NOT EXISTS invoice_counter (
   year int PRIMARY KEY,
   last int NOT NULL DEFAULT 0
 );
+
+-- Paiements e-Wari (lot V1)
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider_payment_id text;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS pay_url text NOT NULL DEFAULT '';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS qr_payload text NOT NULL DEFAULT '';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS expires_at timestamptz;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS failure_reason text NOT NULL DEFAULT '';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fee int;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS payer text NOT NULL DEFAULT '';
+ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_status_check;
+ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK (status IN ('pending', 'paid', 'failed', 'cancelled', 'expired'));
+CREATE UNIQUE INDEX IF NOT EXISTS payments_provider_id_idx ON payments(provider, provider_payment_id) WHERE provider_payment_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS payment_events (
+  event_id text PRIMARY KEY,
+  provider text NOT NULL,
+  payment_id uuid REFERENCES payments(id) ON DELETE SET NULL,
+  type text NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT now()
+);

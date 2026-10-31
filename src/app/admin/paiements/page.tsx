@@ -15,13 +15,13 @@ export default async function AdminPayments() {
       `SELECT provider,count(*)::int n,coalesce(sum(amount),0)::int total FROM payments WHERE status='paid' GROUP BY provider ORDER BY total DESC`,
     ),
   ]);
-  const STATUS: Record<string, string> = { pending: "En attente", paid: "Payé", failed: "Échoué", cancelled: "Annulé" };
+  const STATUS: Record<string, string> = { pending: "En attente", paid: "Payé", failed: "Échoué", cancelled: "Annulé", expired: "Expiré" };
   const label = (c: string) => PAYMENT_PROVIDERS.find((p) => p.code === c)?.label ?? c;
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold">Paiements</h1>
       <p className="text-sm text-ink-soft">
-        Mode actuel : {process.env.PAYMENTS_MODE === "live" ? "paiements réels" : "démonstration (aucun encaissement réel)"}.
+        Mode actuel : {process.env.PAYMENTS_MODE === "ewari" ? `e-Wari (${(process.env.EWARI_SECRET_KEY || "").startsWith("sk_live_") ? "production" : "bac à sable"})` : "démonstration (aucun encaissement réel)"}.
       </p>
       <ul className="flex flex-wrap gap-2">
         {byProvider.map((p) => <li key={p.provider} className="card px-4 py-3 text-sm"><strong>{label(p.provider)}</strong> : {p.n} paiement(s), {money(p.total)}</li>)}

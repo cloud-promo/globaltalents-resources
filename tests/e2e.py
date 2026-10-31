@@ -229,9 +229,8 @@ with sync_playwright() as p:
     def recruiter_payment_cvtheque():
         page.goto(BASE + "/recruteur/abonnement")
         page.check("input[name=plan][value=cvtheque1]")
-        page.check("input[name=provider][value=wave]")
         page.fill("input[name=phone]", "+221 77 111 22 33")
-        page.click("text=Continuer vers le paiement")
+        page.click("text=Payer avec e-Wari")
         page.wait_for_url("**/recruteur/paiement/**")
         page.click("text=Simuler un paiement réussi")
         expect(page.get_by_text("Paiement reçu")).to_be_visible()
@@ -241,7 +240,7 @@ with sync_playwright() as p:
         page.locator("button", has_text="Voir les coordonnées").first.click()
         page.wait_for_load_state("networkidle")
         expect(page.locator("a[href^='mailto:']").first).to_be_visible()
-    step("Paiement Wave (démo), facture et CVthèque", recruiter_payment_cvtheque)
+    step("Paiement (démo), facture et CVthèque", recruiter_payment_cvtheque)
 
     def access_control():
         # Un recruteur ne voit pas les candidatures d'une autre entreprise

@@ -1,7 +1,6 @@
 import { requireRecruiter } from "@/lib/auth";
 import { one, query } from "@/lib/db";
 import { money, shortDate } from "@/lib/format";
-import { PAYMENT_PROVIDERS } from "@/lib/ref";
 import { ActionForm, Submit } from "@/components/Form";
 import { startPayment } from "@/app/actions/recruiter";
 
@@ -23,7 +22,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     ),
   ]);
   const unlimited = c?.cv_unlimited_until && new Date(c.cv_unlimited_until) > new Date();
-  const STATUS: Record<string, string> = { pending: "En attente", paid: "Payé", failed: "Échoué", cancelled: "Annulé" };
+  const STATUS: Record<string, string> = { pending: "En attente", paid: "Payé", failed: "Échoué", cancelled: "Annulé", expired: "Expiré" };
 
   return (
     <div className="space-y-6">
@@ -53,21 +52,17 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           </div>
         </fieldset>
         <fieldset>
-          <legend className="text-lg font-bold">Moyen de paiement</legend>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {PAYMENT_PROVIDERS.map((p, i) => (
-              <label key={p.code} className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm has-[:checked]:border-indigo has-[:checked]:bg-wash">
-                <input type="radio" name="provider" value={p.code} defaultChecked={i === 0} /> {p.label}
-              </label>
-            ))}
-          </div>
+          <legend className="text-lg font-bold">Paiement par e-Wari</legend>
+          <p className="mt-1 text-sm text-ink-soft">
+            Réglez depuis votre compte e-Wari, ou par Mobile Money (Wave, Orange Money, Moov, MTN, Free Money) et carte bancaire via la page e-Wari.
+          </p>
           <label className="mt-3 block max-w-sm">
-            <span className="label">Numéro Mobile Money qui va payer</span>
+            <span className="label">Téléphone du payeur (facultatif)</span>
             <input name="phone" type="tel" className="input" placeholder="+221 77 123 45 67" />
-            <span className="hint">Inutile pour un paiement par carte.</span>
+            <span className="hint">e-Wari peut lui envoyer directement la demande de paiement.</span>
           </label>
         </fieldset>
-        <Submit pendingLabel="Préparation du paiement…">Continuer vers le paiement</Submit>
+        <Submit pendingLabel="Préparation du paiement…">Payer avec e-Wari</Submit>
         <p className="text-xs text-muted">Grands comptes : paiement par virement sur facture, écrivez à entreprises@globaltalents-resources.com.</p>
       </ActionForm>
 
@@ -83,7 +78,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                 <td className="p-3">{shortDate(p.created_at)}</td>
                 <td className="p-3">{p.plan}</td>
                 <td className="p-3">{money(p.amount)}</td>
-                <td className="p-3">{PAYMENT_PROVIDERS.find((x) => x.code === p.provider)?.label}</td>
+                <td className="p-3">{p.provider === "ewari" ? "e-Wari" : "Démonstration"}</td>
                 <td className="p-3">{STATUS[p.status]}</td>
                 <td className="p-3">{p.invoice_number ? <a href={`/recruteur/factures/${p.id}`} className="text-indigo hover:underline">{p.invoice_number}</a> : p.status === "pending" ? <a href={`/recruteur/paiement/${p.id}`} className="text-indigo hover:underline">Finaliser</a> : ""}</td>
               </tr>

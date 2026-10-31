@@ -63,12 +63,8 @@ export const STAGES = [
 export type StageCode = (typeof STAGES)[number]["code"];
 
 export const PAYMENT_PROVIDERS = [
-  { code: "wave", label: "Wave" },
-  { code: "orange_money", label: "Orange Money" },
-  { code: "moov", label: "Moov Money" },
-  { code: "mtn", label: "MTN MoMo" },
-  { code: "free_money", label: "Free Money" },
-  { code: "card", label: "Carte bancaire" },
+  { code: "ewari", label: "e-Wari" },
+  { code: "demo", label: "Démonstration" },
 ] as const;
 
 export const ARTICLE_CATEGORIES = ["Conseils", "Actualité de l'emploi", "Outils recruteurs", "Enquêtes"] as const;

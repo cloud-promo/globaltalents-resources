@@ -29,6 +29,8 @@ npm run dev               # http://localhost:3000
 
 Tests de bout en bout (Python 3 et Playwright) : `npm test`.
 
+Paiement e-Wari en local : lancez le simulateur `node scripts/mock-ewari.mjs`, démarrez l'application avec `PAYMENTS_MODE=ewari`, `EWARI_API_URL=http://localhost:4010`, `EWARI_SECRET_KEY=sk_test_local`, `EWARI_WEBHOOK_SECRET=whsec_local`, puis `python3 tests/ewari.py`.
+
 ## Comptes de démonstration
 
 Créés quand `SEED_DEMO=1`. Mot de passe : la valeur de `DEMO_PASSWORD` (par défaut `Demo-GTR-2026`).
@@ -48,7 +50,8 @@ En production réelle, mettez `SEED_DEMO=0` avant d'ouvrir le service au public,
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Compte administrateur créé au premier démarrage |
 | `SEED_DEMO` | `1` pour charger les données de démonstration |
 | `DEMO_PASSWORD` | Mot de passe des comptes de démonstration |
-| `PAYMENTS_MODE` | `demo` (par défaut, aucun encaissement) ou `live` une fois l'agrégateur branché |
+| `PAYMENTS_MODE` | `demo` (par défaut, aucun encaissement) ou `ewari` |
+| `EWARI_API_URL`, `EWARI_SECRET_KEY`, `EWARI_WEBHOOK_SECRET` | Accès à l'API marchand e-Wari (voir `docs/EWARI.md`) |
 
 ## Architecture
 
@@ -60,7 +63,7 @@ En production réelle, mettez `SEED_DEMO=0` avant d'ouvrir le service au public,
 
 ## Ce qui reste pour les lots suivants
 
-- **V1** : IA (extraction de CV, présélection, rédaction d'offres), envoi réel des e-mails, SMS et WhatsApp, agrégateur de paiement réel (CinetPay, PayDunya ou équivalent), tests de personnalité, API publique, application Android
+- **V1** : encaissement e-Wari (fait côté Global Talents, en attente de l'API marchand e-Wari, voir `docs/EWARI.md`), IA (extraction de CV, présélection, rédaction d'offres), envoi réel des e-mails, SMS et WhatsApp, tests de personnalité, API publique, application Android
 - **V2** : SIRH (dossiers, congés, temps, portail employé) et paie Sénégal et Côte d'Ivoire, labels employeur
 - **V3** : paie des 4 autres pays, entretiens annuels, formation, SSO, marketplace de plugins
 

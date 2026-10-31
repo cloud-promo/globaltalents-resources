@@ -6,8 +6,10 @@ import crypto from "node:crypto";
 import { z } from "zod";
 import { one, query, tx } from "@/lib/db";
 import { requireRecruiter, hashPassword } from "@/lib/auth";
+import { ewariConfig, createEwariPayment, cancelEwariPayment, EwariError } from "@/lib/ewari";
+import { markPaid, markClosed, refreshFromEwari } from "@/lib/payments";
 import { notify, audit } from "@/lib/notify";
-import { STAGES, CONTRACT_TYPES, stageOf, PAYMENT_PROVIDERS } from "@/lib/ref";
+import { STAGES, CONTRACT_TYPES, stageOf } from "@/lib/ref";
 import type { FormState } from "@/components/Form";
 
 const str = (v: FormDataEntryValue | null, max = 5000) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -296,61 +298,78 @@ export async function removeMember(data: FormData) {
   revalidatePath("/recruteur/equipe");
 }
 
-// ---------- Paiement (mode démonstration tant que l'agrégateur n'est pas branché) ----------
+// ---------- Paiement : e-Wari (PAYMENTS_MODE=ewari) ou démonstration ----------
 
 export async function startPayment(_: FormState, data: FormData): Promise<FormState> {
   const { user, company } = await requireRecruiter();
-  const plan = await one<{ code: string; price_xof: number }>(`SELECT code,price_xof FROM plans WHERE code=$1`, [str(data.get("plan"), 40)]);
+  const plan = await one<{ code: string; name: string; price_xof: number }>(`SELECT code,name,price_xof FROM plans WHERE code=$1`, [str(data.get("plan"), 40)]);
   if (!plan) return { error: "Choisissez une formule." };
-  const provider = str(data.get("provider"), 30);
-  if (!PAYMENT_PROVIDERS.some((p) => p.code === provider)) return { error: "Choisissez un moyen de paiement." };
   const phone = str(data.get("phone"), 30);
-  if (provider !== "card" && phone.replace(/\D/g, "").length < 8) return { error: "Indiquez le numéro Mobile Money qui va payer." };
-  const reference = "GTR-" + crypto.randomBytes(5).toString("hex").toUpperCase();
+  const reference = "GTR-" + crypto.randomBytes(6).toString("hex").toUpperCase();
+  const cfg = ewariConfig();
+  const provider = cfg.enabled ? "ewari" : "demo";
+
   const p = await one<{ id: string }>(
     `INSERT INTO payments(company_id,user_id,plan_code,amount,currency,provider,phone,reference) VALUES($1,$2,$3,$4,'XOF',$5,$6,$7) RETURNING id`,
     [company.company_id, user.id, plan.code, plan.price_xof, provider, phone, reference],
   );
-  await audit(user.id, "payment.start", "payment", p!.id, { plan: plan.code, provider });
-  redirect(`/recruteur/paiement/${p!.id}`);
+  const id = p!.id;
+
+  if (provider === "ewari") {
+    const base = process.env.APP_URL || "http://localhost:3000";
+    try {
+      const r = await createEwariPayment({
+        amount: plan.price_xof,
+        currency: "XOF",
+        reference,
+        description: `${plan.name} - ${company.name}`,
+        customer: { name: `${user.first_name} ${user.last_name}`.trim(), email: user.email, phone: phone || user.phone },
+        callback_url: `${base}/api/webhooks/ewari`,
+        return_url: `${base}/recruteur/paiement/${id}`,
+        metadata: { payment_id: id, company_id: company.company_id, plan: plan.code },
+      });
+      if (r.reference !== reference || Number(r.amount) !== plan.price_xof) throw new EwariError("Réponse e-Wari incohérente (montant ou référence).");
+      await query(
+        `UPDATE payments SET provider_payment_id=$2,pay_url=$3,qr_payload=$4,expires_at=$5 WHERE id=$1`,
+        [id, r.id, r.pay_url, r.qr_payload || r.pay_url, r.expires_at || null],
+      );
+    } catch (e) {
+      await query(`UPDATE payments SET status='failed',failure_reason=$2 WHERE id=$1`, [id, String((e as Error).message).slice(0, 300)]);
+      await audit(user.id, "payment.create_failed", "payment", id, { error: String((e as Error).message) });
+      return { error: "Le service de paiement e-Wari ne répond pas pour le moment. Réessayez dans quelques minutes." };
+    }
+  }
+  await audit(user.id, "payment.start", "payment", id, { plan: plan.code, provider });
+  redirect(`/recruteur/paiement/${id}`);
 }
 
 export async function confirmDemoPayment(data: FormData) {
   const { user, company } = await requireRecruiter();
-  if (process.env.PAYMENTS_MODE === "live") return; // en production, seul le webhook de l'agrégateur valide un paiement
+  if (process.env.PAYMENTS_MODE === "ewari") return; // en production, seul e-Wari confirme un paiement
   const id = str(data.get("id"), 60);
-  const outcome = str(data.get("outcome"));
-  const pay = await one<{ id: string; plan_code: string; status: string }>(
-    `SELECT id,plan_code,status FROM payments WHERE id=$1 AND company_id=$2`,
-    [id, company.company_id],
-  );
-  if (!pay || pay.status !== "pending") return;
-  if (outcome !== "paid") {
-    await query(`UPDATE payments SET status='failed' WHERE id=$1`, [id]);
-    revalidatePath(`/recruteur/paiement/${id}`);
-    return;
-  }
-  await applyPayment(pay.id, company.company_id, pay.plan_code);
-  await audit(user.id, "payment.paid", "payment", id);
+  const pay = await one<{ id: string }>(`SELECT id FROM payments WHERE id=$1 AND company_id=$2 AND provider='demo' AND status='pending'`, [id, company.company_id]);
+  if (!pay) return;
+  if (str(data.get("outcome")) === "paid") await markPaid(pay.id, { payer: "démonstration" });
+  else await markClosed(pay.id, "failed", "Échec simulé");
+  await audit(user.id, "payment.demo", "payment", id);
   revalidatePath("/recruteur", "layout");
 }
 
-async function applyPayment(paymentId: string, companyId: string, planCode: string) {
-  await tx(async (c) => {
-    const plan = (await c.query(`SELECT * FROM plans WHERE code=$1`, [planCode])).rows[0];
-    const year = new Date().getFullYear();
-    const n = (await c.query(
-      `INSERT INTO invoice_counter(year,last) VALUES($1,1) ON CONFLICT (year) DO UPDATE SET last=invoice_counter.last+1 RETURNING last`,
-      [year],
-    )).rows[0].last;
-    await c.query(`UPDATE payments SET status='paid',paid_at=now(),invoice_number=$2 WHERE id=$1`, [paymentId, `FA-${year}-${String(n).padStart(5, "0")}`]);
-    await c.query(
-      `UPDATE companies SET job_credits=job_credits+$2, cv_credits=cv_credits+$3,
-         cv_unlimited_until = CASE WHEN $4 THEN greatest(coalesce(cv_unlimited_until,now()),now()) + ($5 || ' days')::interval ELSE cv_unlimited_until END,
-         plan_code = CASE WHEN $6='month' THEN $7 ELSE plan_code END,
-         plan_expires_at = CASE WHEN $6='month' THEN greatest(coalesce(plan_expires_at,now()),now()) + ($5 || ' days')::interval ELSE plan_expires_at END
-       WHERE id=$1`,
-      [companyId, plan.job_credits, plan.cv_credits, plan.cv_unlimited, String(plan.duration_days), plan.period, plan.code],
-    );
-  });
+export async function cancelPayment(data: FormData) {
+  const { company } = await requireRecruiter();
+  const id = str(data.get("id"), 60);
+  const pay = await one<{ id: string; provider: string; provider_payment_id: string | null }>(
+    `SELECT id,provider,provider_payment_id FROM payments WHERE id=$1 AND company_id=$2 AND status='pending'`,
+    [id, company.company_id],
+  );
+  if (!pay) return;
+  if (pay.provider === "ewari" && pay.provider_payment_id) {
+    try {
+      const r = await cancelEwariPayment(pay.provider_payment_id);
+      // Le client a peut-être payé juste avant l'annulation : on suit l'état réel
+      if (r.status === "succeeded") { await refreshFromEwari(pay.id); revalidatePath("/recruteur", "layout"); return; }
+    } catch { /* l'annulation locale reste possible ; une confirmation tardive sera rapprochée */ }
+  }
+  await markClosed(pay.id, "cancelled", "Annulé par le recruteur");
+  revalidatePath("/recruteur", "layout");
 }
